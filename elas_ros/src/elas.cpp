@@ -97,11 +97,12 @@ public:
     }
 
     // Create the elas processing class
-    //param.reset(new Elas::parameters(Elas::MIDDLEBURY));
+    param.reset(new Elas::parameters(Elas::MIDDLEBURY));
     //param.reset(new Elas::parameters(Elas::ROBOTICS));
-    param.reset(new Elas::parameters);
+    //param.reset(new Elas::parameters);
 
     /* Parameters tunned*/
+	/*
     param->disp_min              = 0;
     param->disp_max              = 255;
     param->support_threshold     = 0.95;
@@ -125,6 +126,7 @@ public:
     param->filter_adaptive_mean  = 1;
     param->postprocess_only_left = 1;
     param->subsampling           = 0;
+	*/
 
     //param->match_texture = 1;
     //param->postprocess_only_left = 1;
