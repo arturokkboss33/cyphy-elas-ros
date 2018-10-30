@@ -54,18 +54,18 @@ class Elas_Proc
 public:
   Elas_Proc(const std::string& transport)
   {
-    ros::NodeHandle local_nh("~");
-    local_nh.param("queue_size", queue_size_, 5);
+    this->_local_nh = ros::NodeHandle("~");
+    this->_local_nh.param("queue_size", queue_size_, 5);
 
     // Topics
-    std::string stereo_ns = nh.resolveName("stereo");
-    std::string left_topic = ros::names::clean(stereo_ns + "/left/" + nh.resolveName("image"));
-    std::string right_topic = ros::names::clean(stereo_ns + "/right/" + nh.resolveName("image"));
+    std::string stereo_ns = this->nh.resolveName("stereo");
+    std::string left_topic = ros::names::clean(stereo_ns + "/left/" + this->nh.resolveName("image"));
+    std::string right_topic = ros::names::clean(stereo_ns + "/right/" + this->nh.resolveName("image"));
     std::string left_info_topic = stereo_ns + "/left/camera_info";
     std::string right_info_topic = stereo_ns + "/right/camera_info";
 
     // Create the elas processing class
-    local_nh.param("robotics_stereo_params", robotics_stereo_params_,false);
+    this->_local_nh.param("robotics_stereo_params", robotics_stereo_params_,false);
     std::string robotics_stereo_params = "robotics";
     if(robotics_stereo_params_){
       param.reset(new Elas::parameters(Elas::ROBOTICS));
@@ -78,41 +78,83 @@ public:
     elas_.reset(new Elas(*param));
 
     // Check for user stereo camera model
-    local_nh.param("user_defined_camera_model", user_defined_camera_model_,false);
+    this->_local_nh.param("user_defined_camera_model", user_defined_camera_model_,false);
     ROS_INFO("User camera model: %d", user_defined_camera_model_);
     if(user_defined_camera_model_){
-      user_left_cam_info_.height = user_right_cam_info_.height = 516;
-      user_left_cam_info_.width = user_right_cam_info_.width = 688;
-      user_left_cam_info_.distortion_model = user_right_cam_info_.distortion_model = "plumb_bob";
-      //user_left_cam_info_.D = user_right_cam_info_.D = {0.,0.,0.,0.,0.};
-      user_left_cam_info_.K = user_right_cam_info_.K = {580.,0.,344.5,0.,580.,258.5,0.,0.,1.};
-      user_left_cam_info_.R = user_right_cam_info_.R = {1.,0.,0.,0.,1.,0.,0.,0.,1.};
-      user_left_cam_info_.P = user_right_cam_info_.P = {580., 0.0, 344.5, -0.0, 0.0, 580., 258.5, 0.0, 0.0, 0.0, 1.0, 0.0};
-      user_right_cam_info_.P[3] = -580.*.3; 
-      user_left_cam_info_.binning_x = user_right_cam_info_.binning_x = 0;
-      user_left_cam_info_.binning_y = user_right_cam_info_.binning_y = 0;
+
+      int cam_info_height;
+      int cam_info_width;
+      std::string cam_info_distortion_model = "";
+      std::vector<double> D_params;
+      std::vector<double> K_params;
+      std::vector<double> R_params;
+      std::vector<double> P_params;
+      int cam_info_binning_x;
+      int cam_info_binning_y;
+
+      ros::param::param("~cam_info_height", cam_info_height, cam_info_height);
+      ros::param::param("~cam_info_width", cam_info_width, cam_info_width);
+      ros::param::param("~cam_info_distortion_model", cam_info_distortion_model, cam_info_distortion_model);
+      this->getArrayParameter<double>("D_params",D_params);
+      this->getArrayParameter<double>("K_params",K_params);
+      this->getArrayParameter<double>("R_params",R_params);
+      this->getArrayParameter<double>("P_params",P_params);
+      ros::param::param("~cam_info_binning_x", cam_info_binning_x, cam_info_binning_x);
+      ros::param::param("~cam_info_binning_y", cam_info_binning_y, cam_info_binning_y);
+
+      ROS_INFO("User defined stereo camera params ...");
+      user_left_cam_info_.height = user_right_cam_info_.height = cam_info_height;
+      ROS_INFO("Cam height: %d",cam_info_height);
+      user_left_cam_info_.width = user_right_cam_info_.width = cam_info_width;
+      ROS_INFO("Cam width: %d",cam_info_width);
+      user_left_cam_info_.distortion_model = user_right_cam_info_.distortion_model = cam_info_distortion_model;
+      ROS_INFO("Cam distortion model: %s",cam_info_distortion_model.c_str());
+      ROS_INFO("Cam model D matrx:");
+      for(unsigned int i_elem = 0; i_elem < D_params.size(); ++i_elem){
+        user_left_cam_info_.D.push_back(D_params[i_elem]); user_right_cam_info_.D.push_back(D_params[i_elem]);
+        ROS_INFO("* %.2f", D_params[i_elem]);
+      }
+      ROS_INFO("Cam model K matrx:");
+      for(unsigned int i_elem = 0; i_elem < K_params.size(); ++i_elem){
+        user_left_cam_info_.K[i_elem] = K_params[i_elem]; user_right_cam_info_.K[i_elem] = K_params[i_elem];
+        ROS_INFO("* %.2f", K_params[i_elem]);
+      }
+      ROS_INFO("Cam model R matrx:");
+      for(unsigned int i_elem = 0; i_elem < R_params.size(); ++i_elem){
+        user_left_cam_info_.R[i_elem] = R_params[i_elem]; user_right_cam_info_.R[i_elem] = R_params[i_elem];
+        ROS_INFO("* %.2f", R_params[i_elem]);
+      }
+      ROS_INFO("Cam model P matrx:");
+      for(unsigned int i_elem = 0; i_elem < P_params.size(); ++i_elem){
+        user_left_cam_info_.P[i_elem] = P_params[i_elem]; user_right_cam_info_.P[i_elem] = P_params[i_elem];
+        ROS_INFO("* %.2f", P_params[i_elem]);
+      }
+      user_left_cam_info_.binning_x = user_right_cam_info_.binning_x = cam_info_binning_x;
+      ROS_INFO("Cam binning X: %d",cam_info_binning_x);
+      user_left_cam_info_.binning_y = user_right_cam_info_.binning_y = cam_info_binning_y;
+      ROS_INFO("Cam binning Y: %d",cam_info_binning_y);
     }
 
-    image_transport::ImageTransport it(nh);
+    image_transport::ImageTransport it(this->nh);
     left_sub_.subscribe(it, left_topic, 1, transport);
     right_sub_.subscribe(it, right_topic, 1, transport);
-    left_info_sub_.subscribe(nh, left_info_topic, 1);
-    right_info_sub_.subscribe(nh, right_info_topic, 1);
+    left_info_sub_.subscribe(this->nh, left_info_topic, 1);
+    right_info_sub_.subscribe(this->nh, right_info_topic, 1);
 
     ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str());
 
-    image_transport::ImageTransport local_it(local_nh);
+    image_transport::ImageTransport local_it(this->_local_nh);
     std::string stereo_frame = ros::names::clean(stereo_ns + "/left/");
     disp_pub_.reset(new Publisher(local_it.advertise(stereo_frame + "/image_disparity", 1)));
     depth_pub_.reset(new Publisher(local_it.advertise(stereo_frame + "/depth", 1)));
-    pc_pub_.reset(new ros::Publisher(local_nh.advertise<PointCloud>(stereo_frame + "/pointcloud", 1)));
-    elas_fd_pub_.reset(new ros::Publisher(local_nh.advertise<elas_ros::ElasFrameData>(stereo_frame + "/frame_data", 1)));
+    pc_pub_.reset(new ros::Publisher(this->_local_nh.advertise<PointCloud>(stereo_frame + "/pointcloud", 1)));
+    elas_fd_pub_.reset(new ros::Publisher(this->_local_nh.advertise<elas_ros::ElasFrameData>(stereo_frame + "/frame_data", 1)));
 
-    pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>(stereo_frame + "/disparity", 1);
+    pub_disparity_ = this->_local_nh.advertise<stereo_msgs::DisparityImage>(stereo_frame + "/disparity", 1);
 
     // Synchronize input topics. Optionally do approximate synchronization.
     bool approx;
-    local_nh.param("approximate_sync", approx, false);
+    this->_local_nh.param("approximate_sync", approx, false);
     if (approx)
     {
       approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
@@ -126,45 +168,6 @@ public:
       exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
     }
 
-    // Create the elas processing class
-    //param.reset(new Elas::parameters(Elas::MIDDLEBURY));
-    //param.reset(new Elas::parameters(Elas::ROBOTICS));
-    //param.reset(new Elas::parameters);
-
-    /* Parameters tunned*/
-	/*
-    param->disp_min              = 0;
-    param->disp_max              = 255;
-    param->support_threshold     = 0.95;
-    param->support_texture       = 10;
-    param->candidate_stepsize    = 5;
-    param->incon_window_size     = 5;
-    param->incon_threshold       = 5;
-    param->incon_min_support     = 5;
-    param->add_corners           = 0;
-    param->grid_size             = 20;
-    param->beta                  = 0.02;
-    param->gamma                 = 3;
-    param->sigma                 = 1;
-    param->sradius               = 2;
-    param->match_texture         = 1;
-    param->lr_threshold          = 2;
-    param->speckle_sim_threshold = 1;
-    param->speckle_size          = 200;
-    param->ipol_gap_width        = 300;
-    param->filter_median         = 0;
-    param->filter_adaptive_mean  = 1;
-    param->postprocess_only_left = 1;
-    param->subsampling           = 0;
-	*/
-
-    //param->match_texture = 1;
-    //param->postprocess_only_left = 1;
-    //param->ipol_gap_width = 2;
-//#ifdef DOWN_SAMPLE
-//    param->subsampling = true;
-//#endif
-//    elas_.reset(new Elas(*param));
   }
 
   typedef image_transport::SubscriberFilter Subscriber;
@@ -175,6 +178,36 @@ public:
   typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
   typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
   typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
+
+  template<typename ParameterType>
+  bool getArrayParameter(const std::string &key, std::vector<ParameterType> &vec) {
+      XmlRpc::XmlRpcValue list_;
+      this->_local_nh.getParam(key, list_);
+      ROS_ASSERT(list_.getType() == XmlRpc::XmlRpcValue::TypeArray);
+
+      return getArrayParameter<ParameterType>(list_, vec);
+  }
+
+  template<typename ParameterType>
+  bool getArrayParameter(XmlRpc::XmlRpcValue &list, std::vector<ParameterType> &vec) {
+
+      if (!(list.getType() == XmlRpc::XmlRpcValue::TypeArray))
+          return false;
+
+      for (int i = 0; i < list.size(); ++i) {
+          if ((list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble && boost::is_same<ParameterType, double>::value) || (list[i].getType() == XmlRpc::XmlRpcValue::TypeInt && boost::is_same<ParameterType, int>::value)
+                  || (list[i].getType() == XmlRpc::XmlRpcValue::TypeString && boost::is_same<ParameterType, std::string>::value)) {
+              vec.push_back(static_cast<ParameterType>(list[i]));
+          } else if (list[i].getType() == XmlRpc::XmlRpcValue::TypeInt && boost::is_same<ParameterType, double>::value) {
+              vec.push_back(static_cast<ParameterType>(list[i]));
+          } else if (list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble && boost::is_same<ParameterType, int>::value) {
+              vec.push_back(static_cast<ParameterType>(list[i]));
+          } else {
+              return false;
+          }
+      }
+      return true;
+  }
 
   void publish_point_cloud(const sensor_msgs::ImageConstPtr& l_image_msg, 
                            float* l_disp_data, const std::vector<int32_t>& inliers,
@@ -193,9 +226,6 @@ public:
       PointCloud::Ptr point_cloud(new PointCloud());
       point_cloud->header.frame_id = l_info_header.frame_id;
       point_cloud->header.stamp = l_info_header.stamp;
-      //point_cloud->width = 1;
-      //point_cloud->height = inliers.size();
-      //point_cloud->points.resize(inliers.size());
       point_cloud->width = l_width;
       point_cloud->height = l_height;
       point_cloud->points.resize(l_width * l_height);
@@ -412,6 +442,7 @@ public:
 private:
 
   ros::NodeHandle nh;
+  ros::NodeHandle _local_nh;
   Subscriber left_sub_, right_sub_;
   InfoSubscriber left_info_sub_, right_info_sub_;
   boost::shared_ptr<Publisher> disp_pub_;
