@@ -193,9 +193,13 @@ public:
       PointCloud::Ptr point_cloud(new PointCloud());
       point_cloud->header.frame_id = l_info_header.frame_id;
       point_cloud->header.stamp = l_info_header.stamp;
-      point_cloud->width = 1;
-      point_cloud->height = inliers.size();
-      point_cloud->points.resize(inliers.size());
+      //point_cloud->width = 1;
+      //point_cloud->height = inliers.size();
+      //point_cloud->points.resize(inliers.size());
+      point_cloud->width = l_width;
+      point_cloud->height = l_height;
+      point_cloud->points.resize(l_width * l_height);
+      point_cloud->is_dense = false;
 
       elas_ros::ElasFrameData data;
       data.header.frame_id = l_info_msg->header.frame_id;
@@ -230,10 +234,10 @@ public:
         }
       }
 
-      for (size_t i=0; i<inliers.size(); i++)
+      for (size_t i=0; i<l_width*l_height; i++)
       {
         cv::Point2d left_uv;
-        int32_t index = inliers[i];
+        int32_t index = i;
 #ifdef DOWN_SAMPLE
         left_uv.x = (index % l_width) * 2;
         left_uv.y = (index / l_width) * 2;
@@ -242,13 +246,19 @@ public:
         left_uv.y = index / l_width;
 #endif
         cv::Point3d point;
-        model.projectDisparityTo3d(left_uv, l_disp_data[index], point);
-        point_cloud->points[i].x = point.x;
-        point_cloud->points[i].y = point.y;
-        point_cloud->points[i].z = point.z;
-        point_cloud->points[i].r = data.r[index];
-        point_cloud->points[i].g = data.g[index];
-        point_cloud->points[i].b = data.b[index];
+        if(l_disp_data[index] > 0)
+        {
+          model.projectDisparityTo3d(left_uv, l_disp_data[index], point);
+          point_cloud->points[i].x = point.x;
+          point_cloud->points[i].y = point.y;
+          point_cloud->points[i].z = point.z;
+          point_cloud->points[i].r = data.r[index];
+          point_cloud->points[i].g = data.g[index];
+          point_cloud->points[i].b = data.b[index];
+        }else{
+          point_cloud->points[i].x = point_cloud->points[i].y = point_cloud->points[i].z = nanf("") ;
+          point_cloud->points[i].r = point_cloud->points[i].g = point_cloud->points[i].b = (int)nan("");
+        }
 
         data.x[index] = point.x;
         data.y[index] = point.y;
@@ -274,16 +284,6 @@ public:
     sensor_msgs::CameraInfoConstPtr new_l_info_msg;
     sensor_msgs::CameraInfoConstPtr new_r_info_msg;
     if(user_defined_camera_model_){
-      // l_info_msg->height = 3.;
-      // l_info_msg->height = r_info_msg->height = user_left_cam_info_.height;
-      // l_info_msg->width = r_info_msg->height = user_left_cam_info_.width;
-      // l_info_msg->distortion_model = r_info_msg->distortion_model = user_left_cam_info_.distortion_model;
-      // l_info_msg->K = r_info_msg->K = user_left_cam_info_.K;
-      // l_info_msg->R = r_info_msg->R = user_left_cam_info_.R;
-      // l_info_msg->P = user_left_cam_info_.P;
-      // r_info_msg->P = user_right_cam_info_.P; 
-      // l_info_msg->binning_x = r_info_msg->binning_x = user_left_cam_info_.binning_x; 
-      // l_info_msg->binning_y = r_info_msg->binning_y = user_left_cam_info_.binning_y;
       user_left_cam_info_.header = l_info_msg->header;
       user_right_cam_info_.header = r_info_msg->header;
       new_l_info_msg = sensor_msgs::CameraInfoConstPtr( new sensor_msgs::CameraInfo(user_left_cam_info_) );
