@@ -64,6 +64,35 @@ public:
     std::string left_info_topic = stereo_ns + "/left/camera_info";
     std::string right_info_topic = stereo_ns + "/right/camera_info";
 
+    // Create the elas processing class
+    local_nh.param("robotics_stereo_params", robotics_stereo_params_,false);
+    std::string robotics_stereo_params = "robotics";
+    if(robotics_stereo_params_){
+      param.reset(new Elas::parameters(Elas::ROBOTICS));
+    }else{
+      param.reset(new Elas::parameters(Elas::MIDDLEBURY));
+    }
+#ifdef DOWN_SAMPLE
+    param->subsampling = true;
+#endif
+    elas_.reset(new Elas(*param));
+
+    // Check for user stereo camera model
+    local_nh.param("user_defined_camera_model", user_defined_camera_model_,false);
+    ROS_INFO("User camera model: %d", user_defined_camera_model_);
+    if(user_defined_camera_model_){
+      user_left_cam_info_.height = user_right_cam_info_.height = 516;
+      user_left_cam_info_.width = user_right_cam_info_.width = 688;
+      user_left_cam_info_.distortion_model = user_right_cam_info_.distortion_model = "plumb_bob";
+      //user_left_cam_info_.D = user_right_cam_info_.D = {0.,0.,0.,0.,0.};
+      user_left_cam_info_.K = user_right_cam_info_.K = {580.,0.,344.5,0.,580.,258.5,0.,0.,1.};
+      user_left_cam_info_.R = user_right_cam_info_.R = {1.,0.,0.,0.,1.,0.,0.,0.,1.};
+      user_left_cam_info_.P = user_right_cam_info_.P = {580., 0.0, 344.5, -0.0, 0.0, 580., 258.5, 0.0, 0.0, 0.0, 1.0, 0.0};
+      user_right_cam_info_.P[3] = -580.*.3; 
+      user_left_cam_info_.binning_x = user_right_cam_info_.binning_x = 0;
+      user_left_cam_info_.binning_y = user_right_cam_info_.binning_y = 0;
+    }
+
     image_transport::ImageTransport it(nh);
     left_sub_.subscribe(it, left_topic, 1, transport);
     right_sub_.subscribe(it, right_topic, 1, transport);
@@ -73,12 +102,13 @@ public:
     ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str());
 
     image_transport::ImageTransport local_it(local_nh);
-    disp_pub_.reset(new Publisher(local_it.advertise("image_disparity", 1)));
-    depth_pub_.reset(new Publisher(local_it.advertise("depth", 1)));
-    pc_pub_.reset(new ros::Publisher(local_nh.advertise<PointCloud>("point_cloud", 1)));
-    elas_fd_pub_.reset(new ros::Publisher(local_nh.advertise<elas_ros::ElasFrameData>("frame_data", 1)));
+    std::string stereo_frame = ros::names::clean(stereo_ns + "/left/");
+    disp_pub_.reset(new Publisher(local_it.advertise(stereo_frame + "/image_disparity", 1)));
+    depth_pub_.reset(new Publisher(local_it.advertise(stereo_frame + "/depth", 1)));
+    pc_pub_.reset(new ros::Publisher(local_nh.advertise<PointCloud>(stereo_frame + "/pointcloud", 1)));
+    elas_fd_pub_.reset(new ros::Publisher(local_nh.advertise<elas_ros::ElasFrameData>(stereo_frame + "/frame_data", 1)));
 
-    pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>("disparity", 1);
+    pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>(stereo_frame + "/disparity", 1);
 
     // Synchronize input topics. Optionally do approximate synchronization.
     bool approx;
@@ -97,7 +127,7 @@ public:
     }
 
     // Create the elas processing class
-    param.reset(new Elas::parameters(Elas::MIDDLEBURY));
+    //param.reset(new Elas::parameters(Elas::MIDDLEBURY));
     //param.reset(new Elas::parameters(Elas::ROBOTICS));
     //param.reset(new Elas::parameters);
 
@@ -131,10 +161,10 @@ public:
     //param->match_texture = 1;
     //param->postprocess_only_left = 1;
     //param->ipol_gap_width = 2;
-#ifdef DOWN_SAMPLE
-    param->subsampling = true;
-#endif
-    elas_.reset(new Elas(*param));
+//#ifdef DOWN_SAMPLE
+//    param->subsampling = true;
+//#endif
+//    elas_.reset(new Elas(*param));
   }
 
   typedef image_transport::SubscriberFilter Subscriber;
@@ -240,12 +270,32 @@ public:
                const sensor_msgs::CameraInfoConstPtr& r_info_msg)
   {
     ROS_DEBUG("Received images and camera info.");
-    // Update the camera model
-    model_.fromCameraInfo(l_info_msg, r_info_msg);
+    // Update the camera model;
+    sensor_msgs::CameraInfoConstPtr new_l_info_msg;
+    sensor_msgs::CameraInfoConstPtr new_r_info_msg;
+    if(user_defined_camera_model_){
+      // l_info_msg->height = 3.;
+      // l_info_msg->height = r_info_msg->height = user_left_cam_info_.height;
+      // l_info_msg->width = r_info_msg->height = user_left_cam_info_.width;
+      // l_info_msg->distortion_model = r_info_msg->distortion_model = user_left_cam_info_.distortion_model;
+      // l_info_msg->K = r_info_msg->K = user_left_cam_info_.K;
+      // l_info_msg->R = r_info_msg->R = user_left_cam_info_.R;
+      // l_info_msg->P = user_left_cam_info_.P;
+      // r_info_msg->P = user_right_cam_info_.P; 
+      // l_info_msg->binning_x = r_info_msg->binning_x = user_left_cam_info_.binning_x; 
+      // l_info_msg->binning_y = r_info_msg->binning_y = user_left_cam_info_.binning_y;
+      user_left_cam_info_.header = l_info_msg->header;
+      user_right_cam_info_.header = r_info_msg->header;
+      new_l_info_msg = sensor_msgs::CameraInfoConstPtr( new sensor_msgs::CameraInfo(user_left_cam_info_) );
+      new_r_info_msg = sensor_msgs::CameraInfoConstPtr( new sensor_msgs::CameraInfo(user_right_cam_info_) );
+      model_.fromCameraInfo(new_l_info_msg,new_r_info_msg);      
+    }else{
+      model_.fromCameraInfo(l_info_msg, r_info_msg);
+    }
 
     // Allocate new disparity image message
     stereo_msgs::DisparityImagePtr disp_msg =
-      boost::make_shared<stereo_msgs::DisparityImage>();
+    boost::make_shared<stereo_msgs::DisparityImage>();
     disp_msg->header         = l_info_msg->header;
     disp_msg->image.header   = l_info_msg->header;
     disp_msg->image.height   = l_image_msg->height;
@@ -333,7 +383,7 @@ public:
     for (int32_t i=0; i<width*height; i++)
     {
       out_msg.image.data[i] = (uint8_t)std::max(255.0*l_disp_data[i]/disp_max,0.0);
-      //disp_msg->image.data[i] = l_disp_data[i];
+      disp_msg->image.data[i] = l_disp_data[i];
       //disp_msg->image.data[i] = out_msg.image.data[i]
 
       float disp =  l_disp_data[i];
@@ -347,7 +397,10 @@ public:
     // Publish
     disp_pub_->publish(out_msg.toImageMsg());
     depth_pub_->publish(out_depth_msg.toImageMsg());
-    publish_point_cloud(l_image_msg, l_disp_data, inliers, width, height, l_info_msg, r_info_msg);
+    if(user_defined_camera_model_)
+      publish_point_cloud(l_image_msg, l_disp_data, inliers, width, height, new_l_info_msg, new_r_info_msg);
+    else
+      publish_point_cloud(l_image_msg, l_disp_data, inliers, width, height, l_info_msg, r_info_msg);
 
     pub_disparity_.publish(disp_msg);
 
@@ -369,6 +422,11 @@ private:
   boost::shared_ptr<ApproximateSync> approximate_sync_;
   boost::shared_ptr<Elas> elas_;
   int queue_size_;
+  bool user_defined_camera_model_;
+  sensor_msgs::CameraInfo user_left_cam_info_;
+  sensor_msgs::CameraInfo user_right_cam_info_;
+  bool robotics_stereo_params_;
+
 
   image_geometry::StereoCameraModel model_;
   ros::Publisher pub_disparity_;
