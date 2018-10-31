@@ -27,6 +27,7 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
 #include <stereo_msgs/DisparityImage.h>
+#include <jacobs_stereo_msgs/StereoDisparityArray.h>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
@@ -150,7 +151,7 @@ public:
     pc_pub_.reset(new ros::Publisher(this->_local_nh.advertise<PointCloud>(stereo_frame + "/pointcloud", 1)));
     elas_fd_pub_.reset(new ros::Publisher(this->_local_nh.advertise<elas_ros::ElasFrameData>(stereo_frame + "/frame_data", 1)));
 
-    pub_disparity_ = this->_local_nh.advertise<stereo_msgs::DisparityImage>(stereo_frame + "/disparity", 1);
+    pub_disparity_ = this->_local_nh.advertise<jacobs_stereo_msgs::StereoDisparityArray>(stereo_frame + "/disparity", 1);
 
     // Synchronize input topics. Optionally do approximate synchronization.
     bool approx;
@@ -410,11 +411,17 @@ public:
     out_msg.encoding = sensor_msgs::image_encodings::MONO8;
     out_msg.image = cv::Mat(height, width, CV_8UC1);
     std::vector<int32_t> inliers;
+
+    jacobs_stereo_msgs::StereoDisparityArray disp_array_msg;
+    disp_array_msg.header = l_info_msg->header;
+    disp_array_msg.height = l_info_msg->height;
+    disp_array_msg.width = l_info_msg->width;
+
     for (int32_t i=0; i<width*height; i++)
     {
       out_msg.image.data[i] = (uint8_t)std::max(255.0*l_disp_data[i]/disp_max,0.0);
       disp_msg->image.data[i] = l_disp_data[i];
-      //disp_msg->image.data[i] = out_msg.image.data[i]
+      disp_array_msg.disparity.push_back(l_disp_data[i]);
 
       float disp =  l_disp_data[i];
       // In milimeters
@@ -432,7 +439,7 @@ public:
     else
       publish_point_cloud(l_image_msg, l_disp_data, inliers, width, height, l_info_msg, r_info_msg);
 
-    pub_disparity_.publish(disp_msg);
+    pub_disparity_.publish(disp_array_msg);
 
     // Cleanup data
     //delete l_disp_data;

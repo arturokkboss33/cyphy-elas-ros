@@ -7,6 +7,7 @@ set(CMAKE_BUILD_TYPE Release)
 #   roscpp
 #   sensor_msgs
 #   stereo_msgs
+#   jacobs_stereo_msgs
 #   nav_msgs
 #   message_filters
 #   image_transport
