@@ -1,0 +1,17 @@
+cam_info_height: 516
+cam_info_width: 688
+cam_info_distortion_model: "plumb_bob"
+cam_info_binning_x: 0
+cam_info_binning_y: 0
+
+#Distortion parameters, depending on the distortion model
+D_params: [0.,0.,0.,0.,0.]
+#Intrinsic camera matrix
+K_params: [580.,0.,344.5,0.,580.,258.5,0.,0.,1.]
+#Rectification matrix
+R_params: [1.,0.,0.,0.,1.,0.,0.,0.,1.]
+#Projection matrix
+P_params: [580., 0.0, 344.5, -174.0, 0.0, 580., 258.5, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+
+

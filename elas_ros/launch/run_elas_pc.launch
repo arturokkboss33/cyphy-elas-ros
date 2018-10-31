@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- ARGUMENTS /-->
+    <arg name="camera_namespace" default="/camera"/>
+	<arg name="rect_stereo_namespace" default="/stereo_camera"/>
+    <arg name="user_defined_camera_model" default="false"/>
+    <arg name="stereo_camera_model_file" default="$(find elas_ros)/config/stereo_camera_model.yaml"/>	
+
+
+    <!-- ELAS (EFFICIENT LARGE SCALE STEREO MATCHING) /-->
+    <node name="elas_pc" type="elas_ros" pkg="elas_ros" output="screen" respawn="true">
+        <param name="user_defined_camera_model" value="$(arg user_defined_camera_model)" />
+        <rosparam command="load" file="$(arg stereo_camera_model_file)" if="$(arg user_defined_camera_model)"/>
+        <param name="robotics_stereo_params" value="true" />
+        <remap from="stereo" to="$(arg rect_stereo_namespace)" />
+        <remap from="image" to="image_uncomp" />
+    </node>
+
+</launch>
